@@ -1,0 +1,40 @@
+name: fetch-market-data
+
+on:
+  schedule:
+    # 22:40 UTC Mon-Fri: after US close (07:40 KST next day)
+    - cron: "40 22 * * 1-5"
+    # 07:40 UTC Mon-Fri: after KRX close (16:40 KST)
+    - cron: "40 7 * * 1-5"
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: fetch-market-data
+  cancel-in-progress: false
+
+jobs:
+  fetch:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+      - run: pip install -r requirements.txt
+      - name: Fetch indicators
+        env:
+          FRED_API_KEY: ${{ secrets.FRED_API_KEY }}
+        run: python scripts/fetch.py
+      - name: Commit data
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add data/latest.json
+          git diff --cached --quiet || git commit -m "data: update latest.json"
+          git pull --rebase origin main
+          git push
